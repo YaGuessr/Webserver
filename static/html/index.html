@@ -1,0 +1,29 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="hint-div"></div>
+    <div class="pano-div">
+        <iframe src="about:blank" id="pano-iframe"></iframe>
+    </div>
+    <button id="return" class="return-btn" onclick="to_start();">Return</button>
+    <div class="guess-box">
+        <div class="map-div">
+            <iframe src="about:blank" id="map-iframe"></iframe>
+        </div>
+        <button id="guess" class="guess-btn" onclick="guess();">Guess</button>
+    </div>
+    <div class="answer-box" style="display: none;">
+        <div class="answer-content">
+            <div id="distance-div">m</div>
+            <a id="show-pano-btn" href="about:blank" target="_blank" rel="noopener noreferrer">
+                <img src="/static/media/show-pano.png" style="width: 80%; height: 80%;"/>
+            </a>
+            <button class="next-btn" role="button" onclick="go_random();">Next</button>
+        </div>
+    </div>
+    <script src="/static/js/index.js"></script>
+</body>
+</html>

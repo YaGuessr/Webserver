@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box
+      }
+
+      body {
+        font-family: Arial, sans-serif
+      }
+
+      #map-container {
+        position: relative;
+        width: 100%;
+        height: 100vh
+      }
+
+      #map {
+        cursor: default;
+        width: 100%;
+        height: 100%
+      }
+
+      .info-panel {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #fff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+        z-index: 1000;
+        max-width: 300px
+      }
+
+      .info-panel h3 {
+        margin-bottom: 10px;
+        color: #333
+      }
+
+      .coordinates {
+        font-family: monospace;
+        font-size: 14px;
+        color: #555;
+        margin: 5px 0
+      }
+
+      .btn {
+        background: #4285f4;
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+        font-size: 14px;
+        width: 100%
+      }
+
+      .btn:hover {
+        background: #3367d6
+      }
+
+      .btn-clear {
+        background: #ea4335
+      }
+
+      .btn-clear:hover {
+        background: #c5221f
+      }
+
+      .instructions {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(255, 255, 255, .95);
+        padding: 10px 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+        z-index: 1000;
+        font-size: 14px
+      }
+
+      .layer-switcher {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: #fff;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+        z-index: 1000
+      }
+
+      .layer-switcher label {
+        display: block;
+        margin: 5px 0;
+        cursor: pointer
+      }
+
+      .layer-switcher input {
+        margin-right: 5px
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map-container">
+      <div id="map"></div>
+      <div class="layer-switcher" style="display:none">
+        <strong>Тип карты:</strong>
+        <label>
+          <input type="radio" name="layer" value="google-hybrid" checked="checked"> Google Спутник + надписи </label>
+        <label>
+          <input type="radio" name="layer" value="google-satellite"> Google Спутник </label>
+        <label>
+          <input type="radio" name="layer" value="google-street"> Google Схема </label>
+      </div>
+      <div class="info-panel" style="display:none">
+        <h3>📍 Координаты метки</h3>
+        <div id="marker-info">
+          <p>Кликните на карту, чтобы поставить метку</p>
+        </div>
+        <button class="btn btn-clear" onclick="clearMarker()">Удалить метку</button>
+      </div>
+      <div class="instructions" style="display:none">💡 Google Maps без API ключа! Кликните на карту для метки</div>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      let map;
+      let marker1 = null;
+      let marker2 = null;
+      let connectingLine = null;
+      let currentLayer = null;
+      // Google Maps тайлы БЕЗ API ключа!
+      const googleLayers = {
+        // Спутник + надписи (как в OpenGuessr)
+        'google-hybrid': L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          attribution: '© Google',
+          maxZoom: 20,
+          subdomains: '0123'
+        }),
+        // Только спутник
+        'google-satellite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+          attribution: '© Google',
+          maxZoom: 20,
+          subdomains: '0123'
+        }),
+        // Схема
+        'google-street': L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+          attribution: '© Google',
+          maxZoom: 20,
+          subdomains: '0123'
+        }),
+        // Альтернативный спутник + надписи (как вы нашли)
+        'google-hybrid-alt': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+          attribution: '© Google',
+          maxZoom: 20,
+          subdomains: '0123'
+        })
+      };
+
+      function initMap() {
+        map = L.map('map', {
+          center: [55.8005, 49.0813],
+          zoom: 10,
+          zoomControl: true,
+          scrollWheelZoom: true,
+          dragging: true,
+          doubleClickZoom: true
+        });
+        // По умолчанию - спутник + надписи
+        currentLayer = googleLayers['google-hybrid'];
+        currentLayer.addTo(map);
+        // Парсим URL параметры и создаём маркеры
+        loadMarkersFromURL();
+        document.querySelectorAll(".leaflet-control-attribution.leaflet-control").forEach((it) => {
+          it.remove();
+        });
+        document.querySelectorAll(".leaflet-control-zoom.leaflet-bar.leaflet-control").forEach((it) => {
+          it.remove();
+        });
+      }
+
+      function loadMarkersFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const lat1 = parseFloat(urlParams.get('lat1'));
+        const lng1 = parseFloat(urlParams.get('lng1'));
+        const lat2 = parseFloat(urlParams.get('lat2'));
+        const lng2 = parseFloat(urlParams.get('lng2'));
+        if (!isNaN(lat1) && !isNaN(lng1)) {
+          // Создаём первый маркер (marker.png)
+          const icon1 = L.icon({
+            iconUrl: 'static/media/marker.png',
+            iconSize: [40, 40],
+            iconAnchor: [20, 37],
+            popupAnchor: [20, 37]
+          });
+          marker1 = L.marker([lat1, lng1], {
+            icon: icon1,
+            draggable: false
+          }).addTo(map);
+        }
+        if (!isNaN(lat2) && !isNaN(lng2)) {
+          // Создаём второй маркер (final.png)
+          const icon2 = L.icon({
+            iconUrl: 'static/media/final.png',
+            iconSize: [40, 40],
+            iconAnchor: [10, 37],
+            popupAnchor: [10, 37]
+          });
+          marker2 = L.marker([lat2, lng2], {
+            icon: icon2,
+            draggable: false
+          }).addTo(map);
+        }
+        // Создаём линию между маркерами, если оба существуют
+        if (marker1 && marker2) {
+          connectingLine = L.polyline([
+            marker1.getLatLng(),
+            marker2.getLatLng()
+          ], {
+            color: '#ff0000',
+            weight: 3,
+            opacity: 0.8,
+            dashArray: '10, 0'
+          }).addTo(map);
+        }
+        // Если есть оба маркера, центрируем карту на них
+        if (marker1 && marker2) {
+          const bounds = L.latLngBounds([
+            marker1.getLatLng(),
+            marker2.getLatLng()
+          ]);
+          map.fitBounds(bounds, {
+            padding: [50, 50]
+          });
+        } else if (marker1) {
+          map.setView(marker1.getLatLng(), 15);
+        } else if (marker2) {
+          map.setView(marker2.getLatLng(), 15);
+        }
+      }
+      document.addEventListener('DOMContentLoaded', initMap);
+    </script>
+  </body>
+</html>
